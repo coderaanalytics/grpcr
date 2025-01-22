@@ -1,0 +1,12 @@
+Package: gRPCr
+Title: A gRPC server and client for R(ProtoBuf) 
+Version: 0.0.0
+Date: 2025-01-22
+Authors@R: c(person(given = "Byron", family = "Botha", role = c("aut", "cre"), email = "byron@codera.co.za"))
+Description: A gRPC server and client for R(ProtoBuf).
+Depends: R (>= 4.2.0)
+Imports: rJava
+Suggests: RProtoBuf
+URL: https://github.com/coderaanalytics/grpcr
+BugReports: https://github.com/coderaanalytics/grpcr/issues
+License: MIT + file LICENSE
