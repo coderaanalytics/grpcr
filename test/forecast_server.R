@@ -1,7 +1,7 @@
 #install.packages("~/Documents/software/grpcr", repos = NULL, type = "source")
 
-library(gRPCr)
 library(RProtoBuf)
+library(gRPCr)
 
 RProtoBuf::readProtoFiles("resources/auto_arima.proto")
 

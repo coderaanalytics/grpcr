@@ -10,16 +10,18 @@ grpc_server <- function(services, port = 35000, start_server = TRUE, block_proce
     }
     .jaddClassPath(system.file("grpcr.jar", package = "gRPCr"))
     grpcr <- .jnew("software/codera/grpcr/Server")
+    service_map <- .jnew("java/util/HashMap")
     for (service_name in names(services)) {
+      method_map <- .jnew("java/util/HashMap")
       for (method_name in names(services[[service_name]])) {
-        .jcall(grpcr,
-               "V",
-               "defMethod",
-               paste0(service_name, "/", method_name),
-               services[[service_name]][[method_name]])
+        J(method_map, "put",
+          method_name, services[[service_name]][[method_name]])
       }
+      J(service_map, "put",
+        service_name, method_map)
     }
-    server <- .jcall(grpcr, "Lio/grpc/Server;", "addServices", as.integer(port))
+    server <- .jcall(grpcr, "Lio/grpc/Server;", "addServices",
+                     service_map, as.integer(port))
     if (start_server) {
       .jcall(server, "Lio/grpc/Server;", "start")
       message("gRPC server listening on port ", port, "\n")
