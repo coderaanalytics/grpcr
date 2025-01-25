@@ -3,3 +3,5 @@ importFrom("rJava", ".jaddClassPath", ".jcall", ".jengine", ".jinit", ".jnew", "
 export(grpc_server)
 export(start_server)
 export(shutdown_server)
+export(grpc_client)
+export(grpc_blocking_request)

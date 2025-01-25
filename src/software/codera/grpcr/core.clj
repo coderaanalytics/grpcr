@@ -1,13 +1,14 @@
 (ns software.codera.grpcr.core
-  (:import [io.grpc BindableService MethodDescriptor MethodDescriptor$Marshaller MethodDescriptor$MethodType ServerBuilder ServerServiceDefinition ServerServiceDefinition$Builder Status]
-           [io.grpc.stub ServerCalls ServerCalls$UnaryMethod StreamObserver]
+  (:import [io.grpc BindableService CallOptions ManagedChannel ManagedChannelBuilder MethodDescriptor MethodDescriptor$Marshaller MethodDescriptor$MethodType ServerBuilder ServerServiceDefinition ServerServiceDefinition$Builder Status StatusRuntimeException]
+           [io.grpc.stub ClientCalls ServerCalls ServerCalls$UnaryMethod StreamObserver]
            [org.rosuda.REngine REXP REXPReference REngineException REXPMismatchException REXPLanguage RList REXPRaw]
-           [java.util HashMap])
-  (:gen-class
-    :name software.codera.grpcr.Server
-    :prefix "-"
-    :main false
-    :methods [^{:static true} [addServices [java.util.HashMap int] io.grpc.Server]]))
+           [java.util HashMap]))
+
+(gen-class
+  :name software.codera.grpcr.Server
+  :prefix "server-"
+  :main false
+  :methods [^{:static true} [addServices [java.util.HashMap int] io.grpc.Server]])
 
 (set! *warn-on-reflection* true)
 
@@ -78,10 +79,32 @@
   []
   services))
 
-(defn -addServices [^HashMap services port]
+(defn server-addServices [^HashMap services port]
   (let [server (ServerBuilder/forPort port)]
     (doseq [service (create-services services)]
       (.addService server ^BindableService service))
     (.. server
         (maxInboundMessageSize Integer/MAX_VALUE)
         build)))
+
+(gen-class
+  :name software.codera.grpcr.Client
+  :prefix "client-"
+  :main false
+  :methods [^{:static true} [buildChannel [java.lang.String] io.grpc.ManagedChannel]
+            ^{:static true} [doCall [io.grpc.ManagedChannel java.lang.String java.lang.String bytes] bytes]])
+
+(defn client-buildChannel [^String host]
+  (.. ManagedChannelBuilder
+      (forTarget host)
+      usePlaintext
+      build))
+
+(defn client-doCall [chan service-name method-name request]
+  (try
+    (let [method-desc (create-method-descriptor service-name method-name) 
+          call (.newCall ^ManagedChannel chan method-desc CallOptions/DEFAULT)
+          response (ClientCalls/blockingUnaryCall call request)]
+      response)
+    (catch StatusRuntimeException e
+      (throw e))))
