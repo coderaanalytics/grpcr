@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "software.codera.forecast";
+option java_outer_classname = "AutoArima";
+
+package auto_arima;
+
+message ObservedData {
+  string period = 1;
+  float observation = 2;
+}
+
+message ArimaParameters {
+  optional uint32 max_p = 1;
+  optional uint32 max_d = 2;
+  optional uint32 max_q = 3;
+  optional uint32 max_seas_p = 4;
+  optional uint32 max_seas_d = 5;
+  optional uint32 max_seas_q = 6;
+  optional bool stationary = 7;
+  optional bool seasonal = 8;
+  optional string ic = 9;
+  optional uint32 n_ahead = 10;
+}
+
+message ForecastRequest {
+  ArimaParameters parameters = 1;
+  repeated ObservedData observations = 2;
+}
+
+message ForecastData {
+  string period = 1;
+  float observation = 2;
+  bool forecast = 3;
+}
+
+message ForecastResponse {
+  repeated ForecastData observations = 1;
+}
+
+service ArimaForecast {
+  rpc Forecast (ForecastRequest) returns (ForecastResponse);
+}

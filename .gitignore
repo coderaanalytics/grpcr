@@ -14,7 +14,7 @@ pom.xml.asc
 .cpcache/
 .clj-kondo/
 .lsp/
-inst/
+/inst/classes
 .gradle/
 .project
 .settings
