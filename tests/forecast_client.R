@@ -2,7 +2,7 @@ library(RProtoBuf)
 library(gRPCr)
 library(zoo)
 
-RProtoBuf::readProtoFiles("resources/auto_arima.proto")
+RProtoBuf::readProtoFiles(system.file("auto_arima.proto", package = "gRPCr"))
 
 request_handler <- function(x) {
   input <- data.frame(period = as.character(as.yearmon(time(x))),

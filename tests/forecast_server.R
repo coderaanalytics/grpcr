@@ -3,7 +3,7 @@
 library(RProtoBuf)
 library(gRPCr)
 
-RProtoBuf::readProtoFiles("resources/auto_arima.proto")
+RProtoBuf::readProtoFiles(system.file("auto_arima.proto", package = "gRPCr"))
 
 extract_fn <- function(request) {
   message <- auto_arima.ForecastRequest$read(request)
