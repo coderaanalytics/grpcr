@@ -1,5 +1,3 @@
-#install.packages("~/Documents/software/grpcr", repos = NULL, type = "source")
-
 library(RProtoBuf)
 library(gRPCr)
 
@@ -51,9 +49,9 @@ transform_fn <- function(input){
 
 load_fn <- function(output) {
   response <- new(auto_arima.ForecastResponse)
-  lapply(.mapply(data.frame, output, NULL), function(record) {
-    response$add("observations", do.call(new, c(auto_arima.ForecastData, record)))
-  })
+  .mapply(function(...) response$add("observations", auto_arima.ForecastData$new(...)),
+          output,
+          NULL)
   return(response)
 }
 

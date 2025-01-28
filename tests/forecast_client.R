@@ -19,10 +19,10 @@ request_handler <- function(x) {
                                   seasonal = TRUE,
                                   ic = "aicc",
                                   n_ahead = 10))
-  lapply(.mapply(data.frame, input, NULL), function(record) {
-    request$add("observations", do.call(new, c(auto_arima.ObservedData, record)))
-  })
-  return(serialize(request, NULL))
+  .mapply(function(...) request$add("observations", auto_arima.ObservedData$new(...)),
+          input,
+          NULL)
+  return(request$serialize(NULL))
 }
 
 response_handler <- function(x) {
