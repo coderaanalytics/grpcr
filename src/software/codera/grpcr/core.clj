@@ -1,14 +1,56 @@
 (ns software.codera.grpcr.core
   (:import [io.grpc BindableService CallOptions ManagedChannel ManagedChannelBuilder MethodDescriptor MethodDescriptor$Marshaller MethodDescriptor$MethodType ServerBuilder ServerServiceDefinition ServerServiceDefinition$Builder Status StatusRuntimeException]
            [io.grpc.stub ClientCalls ServerCalls ServerCalls$UnaryMethod StreamObserver]
-           [org.rosuda.REngine REXP REXPReference REngineException REXPMismatchException REXPLanguage RList REXPRaw]
+           [org.rosuda.REngine REXP REXPReference REngineException REXPMismatchException REXPLanguage RList REXPRaw REXPString]
+           [org.rosuda.REngine.Rserve RConnection RserveException StartRserve]
            [java.util HashMap]))
+
+(defn call-ocap
+  ([con ocap]
+   (.callOCAP con
+              (->> (into-array REXP [ocap])
+                   (RList.)
+                   (REXPLanguage.))))
+  ([con ocap & args]
+   (.callOCAP con
+              (->> (cons ocap args)
+                   (into-array REXP)
+                   (RList.)
+                   (REXPLanguage.)))))
+
+(defn eval-expr
+  ([rengine ref]
+   (.eval rengine
+          (->> (into-array REXP [ref])
+               (RList.)
+               (REXPLanguage.))
+          nil
+          true))
+  ([rengine ref & args]
+   (.eval rengine 
+          (->> (cons ref args)
+               (into-array REXP)
+               (RList.)
+               (REXPLanguage.))
+          nil
+          true)))
+
+(defn ocap->services [con]
+  (let [ocap (->> (.capabilities con)
+                  (call-ocap con)
+                  (.asList))]
+    (->> (.keys ocap)
+         (map #(re-find #"(.+)\.(\w+)$" %))
+         (map (fn [[x y z]] {y {z (.at ocap x)}}))
+         (reduce (partial merge-with merge)))))
 
 (gen-class
   :name software.codera.grpcr.Server
   :prefix "server-"
   :main false
-  :methods [^{:static true} [addServices [java.util.HashMap int] io.grpc.Server]])
+  :methods [^{:static true} [jriServer [java.util.HashMap int] io.grpc.Server]
+            ^{:static true} [rserveServer [java.lang.String int] io.grpc.Server]
+            ^{:static true} [shutdownRserve [] void]])
 
 (set! *warn-on-reflection* true)
 
@@ -19,40 +61,71 @@
     (stream [_ value]
       (java.io.ByteArrayInputStream. value))))
 
-(defn create-methods [methods]
-  (reduce-kv 
-    (fn [methods method-name method-ref]
-      (conj methods
-            {:name method-name
-             :method
-             (fn [request response-observer]
-               (try
-                 (let [data (REXPRaw. request)
-                       expression (->> (into-array REXP [method-ref data])
-                                       (RList.)
-                                       (REXPLanguage.))]
+(defmulti create-method (comp type :ref))
+
+(defmethod create-method REXPReference
+  [method]
+  {:name (:method method)
+   :method (fn [request response-observer]
+             (let [jri (.getEngine ^REXPReference (:ref method))]
+               (locking jri
+                 (try
+                   (let [method (:ref method)
+                         data (REXPRaw. request)]
+                     (.onNext ^StreamObserver response-observer
+                              ^bytes (.asBytes ^REXP (eval-expr jri method data)))
+                     (.onCompleted ^StreamObserver response-observer)
+                     nil)
+                   (catch REngineException e
+                     (println ;;FIXME: log this
+                              (ex-info "Rengine failed"
+                                       {:type :rengine
+                                        :cause "Error invoking 'call'."}
+                                       e))
+                     (.onError ^StreamObserver response-observer
+                               (.asRuntimeException Status/INTERNAL)))
+                   (catch REXPMismatchException e
+                     (println ;;FIXME: log this
+                              (ex-info "R expression mismatch"
+                                       {:type :rexp-mismatch
+                                        :cause "Error invoking 'call'."}
+                                       e))
+                     (.onError ^StreamObserver response-observer
+                               (.asRuntimeException Status/INTERNAL)))))))})
+
+(defmethod create-method REXPString
+  [method]
+  {:name (:method method)
+   :method (fn [request response-observer]
+             (try
+               (with-open [rserve (RConnection.)]
+                 (let [method (-> (ocap->services rserve)
+                                  (get (:service method))
+                                  (get (:method method)))
+                       data (REXPRaw. request)]
                    (.onNext ^StreamObserver response-observer
-                            ^bytes (-> (.getEngine ^REXPReference method-ref)
-                                       (.eval expression nil true)
-                                       (.asBytes)))
+                            ^bytes (.asBytes ^REXP (call-ocap rserve method data)))
                    (.onCompleted ^StreamObserver response-observer)
-                   nil)
-                 (catch REngineException e
-                   (println ;;FIXME: log this
-                            (ex-info "Rengine failed"
-                                     {:type :rengine
-                                      :cause "Error invoking 'call'."}
-                                     e))
-                   (.onError ^StreamObserver response-observer (.asRuntimeException Status/INTERNAL)))
-                 (catch REXPMismatchException e
-                   (println ;;FIXME: log this
-                            (ex-info "R expression mismatch"
-                                     {:type :rexp-mismatch
-                                      :cause "Error invoking 'call'."}
-                                     e))
-                   (.onError ^StreamObserver response-observer (.asRuntimeException Status/INTERNAL)))))}))
-    []
-    methods))
+                   nil))
+               (catch RserveException e
+                 (println ;;FIXME: log this
+                          (ex-info "Rserve connection failed"
+                                   {:type :rserve
+                                    :cause "Error invoking 'call'."}
+                                   e))
+                 (.onError ^StreamObserver response-observer
+                           (.asRuntimeException Status/INTERNAL)))
+               (catch REXPMismatchException e
+                 (println ;;FIXME: log this
+                          (ex-info "R expression mismatch"
+                                   {:type :rexp-mismatch
+                                    :cause "Error invoking 'call'."}
+                                   e))
+                 (.onError ^StreamObserver response-observer
+                           (.asRuntimeException Status/INTERNAL)))))})
+
+(defn create-methods [service methods]
+  (reduce-kv #(conj %1 (create-method {:service service :method %2 :ref %3})) [] methods))
 
 (defn create-method-descriptor [service-name method-name]
   (.. (MethodDescriptor/newBuilder (byte-marshaller) (byte-marshaller))
@@ -68,7 +141,7 @@
             (reify BindableService
               (bindService [_]
                 (let [ssd (ServerServiceDefinition/builder ^String service-name)]
-                  (doseq [method (create-methods methods)]
+                  (doseq [method (create-methods service-name methods)]
                     (.addMethod ^ServerServiceDefinition$Builder ssd
                                 (create-method-descriptor service-name (:name method))
                                 (ServerCalls/asyncUnaryCall 
@@ -79,13 +152,48 @@
   []
   services))
 
-(defn server-addServices [^HashMap services port]
-  (let [server (ServerBuilder/forPort port)]
-    (doseq [service (create-services services)]
-      (.addService server ^BindableService service))
-    (.. server
-        (maxInboundMessageSize Integer/MAX_VALUE)
-        build)))
+(defn server-jriServer [^HashMap services port]
+   (let [server (ServerBuilder/forPort port)]
+     (doseq [service (create-services services)]
+       (.addService server ^BindableService service))
+     (.. server
+         (maxInboundMessageSize Integer/MAX_VALUE)
+         build)))
+
+(defn server-rserveServer [^String services port]
+  (try
+    (StartRserve/launchRserve
+      "R"
+      "--no-save --slave"
+      (str "--no-save --slave "
+           "--RS-set shutdown=1 "
+           "--RS-set qap.oc=1 "
+           "--RS-set source=" services)
+      false)
+    (catch Exception e
+      (println ;;FIXME: log this
+               (ex-info "Failed to start Rserve."
+                        {:type :rserve-launch
+                         :cause "Exception launching Rserve."}
+                        e))))
+  (with-open [rserve (RConnection.)]
+    (let [services (ocap->services rserve)
+          server (ServerBuilder/forPort port)]
+      (doseq [service (create-services services)]
+        (.addService server ^BindableService service))
+      (.. server
+          (maxInboundMessageSize Integer/MAX_VALUE)
+          build))))
+
+(defn server-shutdownRserve []
+  (try
+    (with-open [rserve (RConnection.)]
+      (.shutdown rserve)
+      nil)
+    (catch Exception _
+      (println "Rserve failed to shutdown gracefully, shutting down forcefully")
+      (.exec (Runtime/getRuntime) "pkill Rserve")
+      nil)))
 
 (gen-class
   :name software.codera.grpcr.Client

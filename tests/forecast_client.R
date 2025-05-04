@@ -41,11 +41,11 @@ response_handler <- function(x) {
 
 client <- grpc_client("localhost:35000")
 
-response <- grpc_blocking_request(client = client,
-                                  service = "auto_arima.ArimaForecast",
-                                  method = "Forecast",
-                                  request = request_handler(AirPassengers),
-                                  response_handler = response_handler(AirPassengers))
+response <- grpc_request(client = client,
+                         service = "auto_arima.ArimaForecast",
+                         method = "Forecast",
+                         request = request_handler(AirPassengers),
+                         response_handler = response_handler(AirPassengers))
 
 tail(response$data.frame, n = 24)
 ts.plot(cbind(AirPassengers, response$ts), col = 1:2, lwd = 2:1, lty = 1:2,

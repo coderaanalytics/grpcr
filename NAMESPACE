@@ -1,7 +1,7 @@
 importFrom("rJava", ".jaddClassPath", ".jcall", ".jengine", ".jinit", ".jnew", "J", "toJava")
+importFrom("Rserve", "ocap", "run.Rserve")
 
 export(grpc_server)
-export(start_server)
-export(shutdown_server)
 export(grpc_client)
-export(grpc_blocking_request)
+export(grpc_request)
+export(rserve_init)

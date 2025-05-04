@@ -10,7 +10,7 @@
 (def basis (delay (b/create-basis {:project "deps.edn"})))
 
 (defn clean [_]
-  (b/delete {:path "inst"}))
+  (b/delete {:path "inst/classes"}))
 
 (defn uber [_]
   (clean nil)
