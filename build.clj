@@ -14,11 +14,12 @@
 
 (defn uber [_]
   (clean nil)
-  (b/copy-dir {:src-dirs ["src"]
+  (b/copy-dir {:src-dirs ["clj/main"]
                :target-dir class-dir})
   (b/compile-clj {:basis @basis
-                  :src-dirs ["src"]
+                  :src-dirs ["clj/main"]
                   :class-dir class-dir})
   (b/uber {:class-dir class-dir
            :uber-file uber-file
-           :basis @basis}))
+           :basis @basis})
+  (clean nil))

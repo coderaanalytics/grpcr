@@ -7,7 +7,7 @@ RProtoBuf::readProtoFiles(system.file("auto_arima.proto", package = "gRPCr"))
 request_handler <- function(x) {
   input <- data.frame(period = as.character(as.yearmon(time(x))),
                       observation = x)
-  request <- new(auto_arima.ForecastRequest, 
+  request <- new(auto_arima.ForecastRequest,
                  parameters = new(auto_arima.ArimaParameters,
                                   max_p = 5,
                                   max_d = 2,

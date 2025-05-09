@@ -1,7 +1,7 @@
 rserve_init <- function(services) {
   ocaps <- list()
   for (service in names(services)) {
-    for(method in names(services[[service]])) {
+    for (method in names(services[[service]])) {
       ocaps[[paste(service, method, sep = ".")]] <-
         ocap(services[[service]][[method]])
     }

@@ -4,17 +4,20 @@
             [clojure.pprint :as pp]
             [clojure.spec.alpha :as s]
             [clojure.string :as str])
-  (:import [software.codera.forecast ObservedData ArimaParameters ForecastRequest ArimaForecastGrpc]
-           [io.grpc ManagedChannelBuilder])
+  (:import [com.google.common.util.concurrent FutureCallback Futures MoreExecutors]
+           [io.grpc ManagedChannelBuilder]
+           [software.codera.forecast ObservedData ArimaParameters ForecastRequest ArimaForecastGrpc ArimaForecastGrpc$ArimaForecastFutureStub ArimaForecastGrpc$ArimaForecastFutureStub ArimaForecastGrpc$ArimaForecastBlockingStub])
   (:gen-class))
 
-(defn client [address]
-  (let [[host port] (str/split address #":")]
-    (ArimaForecastGrpc/newBlockingStub
-      (.. (ManagedChannelBuilder/forAddress host (Integer. port))
-          (maxInboundMessageSize Integer/MAX_VALUE)
-          usePlaintext
-          build))))
+(defn client [address blocking?] 
+  (let [[host port] (str/split address #":")
+        channel (.. (ManagedChannelBuilder/forAddress host (Integer. port))
+                    (maxInboundMessageSize Integer/MAX_VALUE)
+                    usePlaintext
+                    build)]
+    (if blocking?
+      (ArimaForecastGrpc/newBlockingStub channel)
+      (ArimaForecastGrpc/newFutureStub channel))))
 
 (defn compile-message [args observations]
   (let [data (ForecastRequest/newBuilder)] 
@@ -40,8 +43,38 @@
                             build)))
     (.build data)))
 
+(defmulti do-forecast (fn [stub _ _] (type stub)))
+
+(defmethod do-forecast ArimaForecastGrpc$ArimaForecastBlockingStub
+  [stub data p]
+  (try
+    (let [response (.forecast stub data)]
+      (deliver p response))
+    (catch Exception throwable
+      (deliver p throwable))))
+
+(defmethod do-forecast ArimaForecastGrpc$ArimaForecastFutureStub
+  [stub data p]
+  (let [response (.forecast stub data)]
+    (Futures/addCallback response
+                         (reify FutureCallback
+                           (onSuccess [_ result]
+                             (deliver p result))
+                           (onFailure [_ throwable]
+                             (deliver p throwable)))
+                         (MoreExecutors/directExecutor))))
+
+(defmacro time-execution
+  [& body]
+  `(let [s# (new java.io.StringWriter)]
+     (binding [*out* s#]
+       (hash-map :return (time ~@body)
+                 :time   (.replaceAll (str s#) "[^0-9\\.]" "")))))
+
 (s/def ::config (s/*
                   (s/cat :prop #{"--server"
+                                 "--blocking"
+                                 "--repeat"
                                  "--data-dir"
                                  "--max-p"
                                  "--max-d"
@@ -64,7 +97,8 @@
                              (let [prop (keyword (subs prop 2))
                                    val (case prop
                                          (:stationary
-                                           :seasonal)
+                                           :seasonal
+                                           :blocking)
                                          (Boolean. val)
 
                                          (:max-p
@@ -73,21 +107,46 @@
                                            :max-seas-p
                                            :max-seas-d
                                            :max-seas-q
-                                           :n-ahead)
+                                           :n-ahead
+                                           :repeat)
                                          (Integer. val)
 
                                          val)]
                                {prop val})))
                       (reduce merge))]
+        (println "Input:")
+        (pp/pprint args)
+        (println)
         (with-open [reader (io/reader (:data-dir args))]
-          (let [data (csv/read-csv reader)
-                request (->> (map zipmap (repeat (map keyword (first data))) (rest data))
-                             (compile-message args))
-                response (-> (client (:server args))
-                             (.forecast request))] 
-            (println "ARIMA forecast (last two years):\n")
-            (pp/pprint
-              (for [datum (take-last 24 (.getObservationsList response ))]
-                {:period (.getPeriod datum)
-                 :observation (.getObservation datum)
-                 :forecast (.getForecast datum)}))))))))
+          (let [data (as-> (csv/read-csv reader) $
+                       (map zipmap (repeat (map keyword (first $))) (rest $)))] 
+            (if (:repeat args)
+              (let [stub (client (:server args) (= (:blocking args) true))
+                    results (repeatedly (:repeat args) promise)]
+
+                (println "Output:")
+                (pp/pprint
+                  (time-execution
+                    (do
+                      (doseq [n (range (:repeat args))
+                              :let [args (assoc args :n-ahead (inc n))
+                                    request (compile-message args data)
+                                    result (nth results n)]]
+                        (do-forecast stub request result))
+                      (for [result results
+                            :let [response (deref result 10000 :timed-out)]]
+                        (if (= response :timed-out)
+                          response
+                          (let [datum (last (.getObservationsList response))]
+                            {:period (.getPeriod datum)
+                             :observation (.getObservation datum)
+                             :forecast (.getForecast datum)})))))))
+              (let [request (compile-message args data)
+                    response (-> (client (:server args) true)
+                                 (.forecast request))]
+                (println "Output:")
+                (pp/pprint
+                  (for [datum (take-last 18 (.getObservationsList response))]
+                    {:period (.getPeriod datum)
+                     :observation (.getObservation datum)
+                     :forecast (.getForecast datum)}))))))))))

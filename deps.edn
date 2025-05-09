@@ -6,6 +6,6 @@
         org.clojure/clojure {:mvn/version "1.11.1"}
         org.rosuda.REngine/REngine {:local/root "/home/byron/Documents/software/grpcr/inst/REngine.jar"}
         org.rosuda.REngine/Rserve {:local/root "/home/byron/Documents/software/grpcr/inst/Rserve.jar"}}
- :paths ["src"]
+ :paths ["clj/main"]
  :aliases {:build {:deps {io.github.clojure/tools.build {:git/tag "v0.9.6" :git/sha "8e78bcc"}}
                    :ns-default build}}}
