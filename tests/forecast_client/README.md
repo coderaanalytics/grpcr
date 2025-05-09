@@ -12,7 +12,15 @@ Compile Clojure code
 clj -T:build uber
 ```
 
+Start the server by running
+
+```bash
+Rscript tests/forecast_server.R
+```
+
 # Run from tests/forecast_client
+
+### 12-period-ahead forecast of AirPasseners data using auto.arima
 
 ```bash
 java -cp target/grpcr-client.jar clojure.main \
@@ -49,6 +57,9 @@ Output:
  {:period "Dec 1961", :observation 477.24255, :forecast true})
 ```
 
+### 12 forecasts of AirPasseners data using auto.arima (blocking)
+
+Estimate the model and forecast the data 12 times incrementing the forecast horizon by 1 period each round and return the terminal data point.
 
 ```bash
 java -cp target/grpcr-client.jar clojure.main \
@@ -83,6 +94,9 @@ Output:
  :time "16968.56223"}
 ```
 
+### 12 forecasts of AirPasseners data using auto.arima (concurrent)
+
+Estimate the model and forecast the data 12 times incrementing the forecast horizon by 1 period each round and return the terminal data point.
 
 ```bash
 java -cp target/grpcr-client.jar clojure.main \
@@ -115,4 +129,10 @@ Output:
   {:period "Nov 1961", :observation 429.87198, :forecast true}
   {:period "Dec 1961", :observation 477.24255, :forecast true}),
  :time "68.190437"}
+```
+
+Estimating the models and forecasting the series in parallel results in a 
+
+```
+16968.56 / 68.19 ~ 250 times speed up
 ```
