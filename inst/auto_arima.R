@@ -1,8 +1,11 @@
-library(gRPCr)
+message("Loading gRPC services to Rserve as OCAPs...")
 
-stopifnot(require(RProtoBuf))
-stopifnot(require(forecast))
-stopifnot(require(zoo))
+suppressPackageStartupMessages({
+  library(gRPCr)
+  library(RProtoBuf)
+  library(forecast)
+  library(zoo)
+})
 
 RProtoBuf::readProtoFiles(system.file("auto_arima.proto", package = "gRPCr"))
 
@@ -78,3 +81,5 @@ services <- list(auto_arima.ArimaForecast =
                           return(serialize(response, NULL))}))
 
 oc.init <- rserve_init(services)
+
+message("Successfully loaded gRPC services to Rserve as OCAPs.")
