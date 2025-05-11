@@ -67,31 +67,30 @@
   [method]
   {:name (:method method)
    :method (fn [request response-observer]
-             (let [jri (.getEngine ^REXPReference (:ref method))]
-               (locking jri
-                 (try
-                   (let [method (:ref method)
-                         data (REXPRaw. request)]
-                     (.onNext ^StreamObserver response-observer
-                              ^bytes (.asBytes ^REXP (eval-expr jri method data)))
-                     (.onCompleted ^StreamObserver response-observer)
-                     nil)
-                   (catch REngineException e
-                     (println ;;FIXME: log this
-                              (ex-info "Rengine failed"
-                                       {:type :rengine
-                                        :cause "Error invoking 'call'."}
-                                       e))
-                     (.onError ^StreamObserver response-observer
-                               (.asRuntimeException Status/INTERNAL)))
-                   (catch REXPMismatchException e
-                     (println ;;FIXME: log this
-                              (ex-info "R expression mismatch"
-                                       {:type :rexp-mismatch
-                                        :cause "Error invoking 'call'."}
-                                       e))
-                     (.onError ^StreamObserver response-observer
-                               (.asRuntimeException Status/INTERNAL)))))))})
+             (try
+               (let [jri (.getEngine ^REXPReference (:ref method))
+                     method (:ref method)
+                     data (REXPRaw. request)]
+                 (.onNext ^StreamObserver response-observer
+                          ^bytes (.asBytes ^REXP (eval-expr jri method data)))
+                 (.onCompleted ^StreamObserver response-observer)
+                 nil)
+               (catch REngineException e
+                 (println ;;FIXME: log this
+                          (ex-info "Rengine failed"
+                                   {:type :rengine
+                                    :cause "Error invoking 'call'."}
+                                   e))
+                 (.onError ^StreamObserver response-observer
+                           (.asRuntimeException Status/INTERNAL)))
+               (catch REXPMismatchException e
+                 (println ;;FIXME: log this
+                          (ex-info "R expression mismatch"
+                                   {:type :rexp-mismatch
+                                    :cause "Error invoking 'call'."}
+                                   e))
+                 (.onError ^StreamObserver response-observer
+                           (.asRuntimeException Status/INTERNAL)))))})
 
 (defmethod create-method REXPString
   [method]
