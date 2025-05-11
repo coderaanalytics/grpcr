@@ -4,6 +4,7 @@
         io.grpc/grpc-stub {:mvn/version "1.61.0"}
         javax.annotation/javax.annotation-api {:mvn/version "1.3.2"}
         org.clojure/clojure {:mvn/version "1.11.1"}
+        org.clojure/core.async {:mvn/version "1.8.741"}
         org.rosuda.REngine/REngine {:local/root "/home/byron/Documents/software/grpcr/inst/REngine.jar"}
         org.rosuda.REngine/Rserve {:local/root "/home/byron/Documents/software/grpcr/inst/Rserve.jar"}}
  :paths ["clj/main"]
