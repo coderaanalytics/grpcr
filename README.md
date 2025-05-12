@@ -2,7 +2,7 @@
 
 A gRPC server and client for R(ProtoBuf)
 
-# Rationale
+### Rationale
 
  > gRPC is a modern open source high performance Remote Procedure Call (RPC) framework that can run in any environment.
 
@@ -10,7 +10,7 @@ This package hopes to extend "any environment" to include R. While there are alt
 
 gRPCr compliments the already existing [RProtoBuf](https://github.com/eddelbuettel/rprotobuf) library, without which it would not be possible.
 
-# Design
+### Design
 
 As [envisioned](https://github.com/eddelbuettel/rprotobuf/blob/master/vignettes/pdf/RProtoBuf-intro.pdf) by the authors of RProtoBuf, gRPCr is based on the functionality of the Rserve package. It maps gRPC services to Rserve's object capabilities (OCAP), using the [Java gRPC](https://github.com/grpc/grpc-java) library to do the heavy lifting.
 
