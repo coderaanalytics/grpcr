@@ -43,38 +43,54 @@ grpc_server <- function(path, port = 35000, backend = "jri", ...) {
                        service_map,
                        as.integer(port))
       .jcall(server, "Lio/grpc/Server;", "start")
-      message("gRPC server listening on port ", port, "\n")
+      message("gRPC server listening on port ", port)
       Sys.sleep(Inf)
     }, error = function(e) {
       stop("Failed to start gRPC server: ", conditionMessage(e), "\n")
     }, interrupt = function(i) {
-      message("\nShutting down gRPC server\n")
+      message("Shutting down gRPC server")
       .jcall(server, "Lio/grpc/Server;", "shutdown")
     })
   } else if (backend == "rserve")  {
     tryCatch({
+      dots <- list(...)
+      max_connections <- if (!is.null(dots$max_connections)) {
+        dots$max_connections
+      } else {
+        10
+      }
+      Rserve(debug = FALSE,
+             port = 6311L,
+             args = paste0("--no-save ",
+                           "--slave ",
+                           "--RS-set shutdown=1 ",
+                           "--RS-set qap.oc=1 ",
+                           "--RS-set source=", path),
+             wait = TRUE)
       .jinit()
       .jaddClassPath(system.file("grpcr.jar", package = "gRPCr"))
       grpcr <- .jnew("software/codera/grpcr/Server")
       server <- .jcall(grpcr,
                        "Lio/grpc/Server;",
                        "rserveServer",
-                       path,
-                       as.integer(port))
+                       as.integer(port),
+                       as.integer(max_connections))
       .jcall(server, "Lio/grpc/Server;", "start")
-      message("gRPC server listening on port ", port, "\n")
+      message("gRPC server listening on port ", port)
       Sys.sleep(Inf)
     }, error = function(e) {
       stop("Failed to start gRPC server: ", conditionMessage(e), "\n")
     }, interrupt = function(i) {
-      message("\nShutting down gRPC server\n")
-      if (backend == "rserve")
-        .jcall(grpcr, "V", "shutdownRserve")
+      if (backend == "rserve") {
+        message("Shutting down Rserve")
+        system("pkill Rserve")
+      }
+      message("Shutting down gRPC server")
       .jcall(server, "Lio/grpc/Server;", "shutdown")
       return(invisible(NULL))
     })
   } else {
-    stop("Backend '", backend, "', not supported.")
+    stop("Backend '", backend, "', not supported.", "\n")
   }
 }
 

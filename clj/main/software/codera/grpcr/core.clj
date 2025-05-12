@@ -1,8 +1,9 @@
 (ns software.codera.grpcr.core
+  (:require [clojure.core.async :refer [>!! <!! chan close!]])
   (:import [io.grpc BindableService CallOptions ManagedChannel ManagedChannelBuilder MethodDescriptor MethodDescriptor$Marshaller MethodDescriptor$MethodType ServerBuilder ServerServiceDefinition ServerServiceDefinition$Builder Status StatusRuntimeException]
            [io.grpc.stub ClientCalls ServerCalls ServerCalls$UnaryMethod StreamObserver]
            [org.rosuda.REngine REXP REXPReference REngineException REXPMismatchException REXPLanguage RList REXPRaw REXPString]
-           [org.rosuda.REngine.Rserve RConnection RserveException StartRserve]
+           [org.rosuda.REngine.Rserve RConnection RserveException]
            [java.util HashMap]))
 
 (defn call-ocap
@@ -49,8 +50,7 @@
   :prefix "server-"
   :main false
   :methods [^{:static true} [jriServer [java.util.HashMap int] io.grpc.Server]
-            ^{:static true} [rserveServer [java.lang.String int] io.grpc.Server]
-            ^{:static true} [shutdownRserve [] void]])
+            ^{:static true} [rserveServer [int int] io.grpc.Server]])
 
 (set! *warn-on-reflection* true)
 
@@ -61,10 +61,10 @@
     (stream [_ value]
       (java.io.ByteArrayInputStream. value))))
 
-(defmulti create-method (comp type :ref))
+(defmulti create-method (fn [method _] ((comp type :ref) method)))
 
 (defmethod create-method REXPReference
-  [method]
+  [method _]
   {:name (:method method)
    :method (fn [request response-observer]
              (try
@@ -93,19 +93,22 @@
                            (.asRuntimeException Status/INTERNAL)))))})
 
 (defmethod create-method REXPString
-  [method]
+  [method connection-pool]
   {:name (:method method)
    :method (fn [request response-observer]
              (try
-               (with-open [rserve (RConnection.)]
-                 (let [method (-> (ocap->services rserve)
-                                  (get (:service method))
-                                  (get (:method method)))
-                       data (REXPRaw. request)]
-                   (.onNext ^StreamObserver response-observer
-                            ^bytes (.asBytes ^REXP (call-ocap rserve method data)))
-                   (.onCompleted ^StreamObserver response-observer)
-                   nil))
+               (let [{services :services
+                      rserve :connection
+                      :as connection} (<!! connection-pool)
+                     method (-> services
+                                (get (:service method))
+                                (get (:method method)))
+                     data (REXPRaw. request)]
+                 (.onNext ^StreamObserver response-observer
+                          ^bytes (.asBytes ^REXP (call-ocap rserve method data)))
+                 (.onCompleted ^StreamObserver response-observer)
+                 (>!! connection-pool connection)
+                 nil)
                (catch RserveException e
                  (println ;;FIXME: log this
                           (ex-info "Rserve connection failed"
@@ -123,8 +126,8 @@
                  (.onError ^StreamObserver response-observer
                            (.asRuntimeException Status/INTERNAL)))))})
 
-(defn create-methods [service methods]
-  (reduce-kv #(conj %1 (create-method {:service service :method %2 :ref %3})) [] methods))
+(defn create-methods [service methods connection-pool]
+  (reduce-kv #(conj %1 (create-method {:service service :method %2 :ref %3} connection-pool)) [] methods))
 
 (defn create-method-descriptor [service-name method-name]
   (.. (MethodDescriptor/newBuilder (byte-marshaller) (byte-marshaller))
@@ -133,23 +136,26 @@
       (setSampledToLocalTracing true)
       build))
 
-(defn create-services [services]
-  (reduce-kv
-    (fn [services service-name methods]
-      (conj services
-            (reify BindableService
-              (bindService [_]
-                (let [ssd (ServerServiceDefinition/builder ^String service-name)]
-                  (doseq [method (create-methods service-name methods)]
-                    (.addMethod ^ServerServiceDefinition$Builder ssd
-                                (create-method-descriptor service-name (:name method))
-                                (ServerCalls/asyncUnaryCall 
-                                  (reify ServerCalls$UnaryMethod
-                                    (invoke [_ request response-observer]
-                                      ((:method method) request ^StreamObserver response-observer))))))
-                  (.build ssd))))))
-  []
-  services))
+(defn create-services 
+  ([services]
+   (create-services services nil))
+  ([services connection-pool]
+   (reduce-kv
+     (fn [services service-name methods]
+       (conj services
+             (reify BindableService
+               (bindService [_]
+                 (let [ssd (ServerServiceDefinition/builder ^String service-name)]
+                   (doseq [method (create-methods service-name methods connection-pool)]
+                     (.addMethod ^ServerServiceDefinition$Builder ssd
+                                 (create-method-descriptor service-name (:name method))
+                                 (ServerCalls/asyncUnaryCall 
+                                   (reify ServerCalls$UnaryMethod
+                                     (invoke [_ request response-observer]
+                                       ((:method method) request ^StreamObserver response-observer))))))
+                   (.build ssd))))))
+     []
+     services)))
 
 (defn server-jriServer [^HashMap services port]
    (let [server (ServerBuilder/forPort port)]
@@ -159,40 +165,21 @@
          (maxInboundMessageSize Integer/MAX_VALUE)
          build)))
 
-(defn server-rserveServer [^String services port]
-  (try
-    (StartRserve/launchRserve
-      "R"
-      "--no-save --slave"
-      (str "--no-save --slave "
-           "--RS-set shutdown=1 "
-           "--RS-set qap.oc=1 "
-           "--RS-set source=" services)
-      false)
-    (catch Exception e
-      (println ;;FIXME: log this
-               (ex-info "Failed to start Rserve."
-                        {:type :rserve-launch
-                         :cause "Exception launching Rserve."}
-                        e))))
+(defn server-rserveServer [port max-connections]
   (with-open [rserve (RConnection.)]
     (let [services (ocap->services rserve)
-          server (ServerBuilder/forPort port)]
-      (doseq [service (create-services services)]
+          server (ServerBuilder/forPort port)
+          connection-pool (chan max-connections)]
+      (dotimes [_ max-connections]
+        (let [connection (RConnection.)]
+          (->> {:connection connection
+                :services (ocap->services connection)}
+               (>!! connection-pool ))))
+      (doseq [service (create-services services connection-pool)]
         (.addService server ^BindableService service))
       (.. server
           (maxInboundMessageSize Integer/MAX_VALUE)
           build))))
-
-(defn server-shutdownRserve []
-  (try
-    (with-open [rserve (RConnection.)]
-      (.shutdown rserve)
-      nil)
-    (catch Exception _
-      (println "Rserve failed to shutdown gracefully, shutting down forcefully")
-      (.exec (Runtime/getRuntime) "pkill Rserve")
-      nil)))
 
 (gen-class
   :name software.codera.grpcr.Client

@@ -123,7 +123,6 @@
             (if (:repeat args)
               (let [stub (client (:server args) (= (:blocking args) true))
                     results (repeatedly (:repeat args) promise)]
-
                 (println "Output:")
                 (pp/pprint
                   (time-execution
@@ -133,14 +132,24 @@
                                     request (compile-message args data)
                                     result (nth results n)]]
                         (do-forecast stub request result))
-                      (for [result results
-                            :let [response (deref result 10000 :timed-out)]]
-                        (if (= response :timed-out)
-                          response
-                          (let [datum (last (.getObservationsList response))]
-                            {:period (.getPeriod datum)
-                             :observation (.getObservation datum)
-                             :forecast (.getForecast datum)})))))))
+                      (doall
+                        (for [result results
+                              :let [time-limit 10000
+                                    response (deref result time-limit :timed-out)]]
+                          (cond
+                            (instance? Throwable response)
+                            (throw response)
+
+                            (= response :timed-out)
+                            (throw (ex-info "Request timed out."
+                                            {:type :timed-out
+                                             :time-limit time-limit}))
+
+                            :else
+                            (let [datum (last (.getObservationsList response))]
+                              {:period (.getPeriod datum)
+                               :observation (.getObservation datum)
+                               :forecast (.getForecast datum)}))))))))
               (let [request (compile-message args data)
                     response (-> (client (:server args) true)
                                  (.forecast request))]
