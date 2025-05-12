@@ -17,3 +17,18 @@ As [envisioned](https://github.com/eddelbuettel/rprotobuf/blob/master/vignettes/
 There is an alternative [rJava/JRI](https://www.rforge.net/rJava/) backend that exposes the gRPC services (essentially a list of R functions that take a raw vector representing a protobuf payload which is (de)serlialised by RProtoBuf) directly to the JVM. It's main limitation being that it is single threaded.
 
 Using Rserve we can control the number of connections we would like and thereby make good use of the asynchronous abilities of gRPC. Unlike Rserve, gRPC is designed to be stateless, so it is not a good choice if the need is to manage state (have persistent sessions) on the server.
+
+### Install
+
+```r
+library(remotes)
+install_github("coderaanalytics/grpcr")
+```
+
+### Author
+
+Byron Botha
+
+### License
+
+MIT
