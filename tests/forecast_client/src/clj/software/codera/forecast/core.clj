@@ -123,32 +123,33 @@
             (if (:repeat args)
               (let [stub (client (:server args) (= (:blocking args) true))
                     results (repeatedly (:repeat args) promise)]
-                (doseq [n (range (:repeat args))
-                        :let [args (assoc args :n-ahead (inc n))
-                              request (compile-message args data)
-                              result (nth results n)]]
-                  (do-forecast stub request result))
                 (println "Output:")
                 (pp/pprint
                   (time-execution
-                    (doall
-                      (for [result results
-                            :let [time-limit 10000
-                                  response (deref result time-limit :timed-out)]]
-                        (cond
-                          (instance? Throwable response)
-                          (throw response)
+                    (do
+                      (doseq [n (range (:repeat args))
+                              :let [args (assoc args :n-ahead (inc n))
+                                    request (compile-message args data)
+                                    result (nth results n)]]
+                        (do-forecast stub request result))
+                      (doall
+                        (for [result results
+                              :let [time-limit 10000
+                                    response (deref result time-limit :timed-out)]]
+                          (cond
+                            (instance? Throwable response)
+                            (throw response)
 
-                          (= response :timed-out)
-                          (throw (ex-info "Request timed out."
-                                          {:type :timed-out
-                                           :time-limit time-limit}))
+                            (= response :timed-out)
+                            (throw (ex-info "Request timed out."
+                                            {:type :timed-out
+                                             :time-limit time-limit}))
 
-                          :else
-                          (let [datum (last (.getObservationsList response))]
-                            {:period (.getPeriod datum)
-                             :observation (.getObservation datum)
-                             :forecast (.getForecast datum)})))))))
+                            :else
+                            (let [datum (last (.getObservationsList response))]
+                              {:period (.getPeriod datum)
+                               :observation (.getObservation datum)
+                               :forecast (.getForecast datum)}))))))))
               (let [request (compile-message args data)
                     response (-> (client (:server args) true)
                                  (.forecast request))]
