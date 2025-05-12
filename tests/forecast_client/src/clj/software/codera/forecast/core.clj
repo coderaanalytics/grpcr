@@ -123,16 +123,15 @@
             (if (:repeat args)
               (let [stub (client (:server args) (= (:blocking args) true))
                     results (repeatedly (:repeat args) promise)]
-
+                (doseq [n (range (:repeat args))
+                        :let [args (assoc args :n-ahead (inc n))
+                              request (compile-message args data)
+                              result (nth results n)]]
+                  (do-forecast stub request result))
                 (println "Output:")
                 (pp/pprint
                   (time-execution
-                    (do
-                      (doseq [n (range (:repeat args))
-                              :let [args (assoc args :n-ahead (inc n))
-                                    request (compile-message args data)
-                                    result (nth results n)]]
-                        (do-forecast stub request result))
+                    (doall
                       (for [result results
                             :let [time-limit 10000
                                   response (deref result time-limit :timed-out)]]

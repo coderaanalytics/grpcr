@@ -91,7 +91,7 @@ Output:
   {:period "Oct 1961", :observation 497.2078, :forecast true}
   {:period "Nov 1961", :observation 429.87198, :forecast true}
   {:period "Dec 1961", :observation 477.24255, :forecast true}),
- :time "16968.56223"}
+ :time "19631.489844"}
 ```
 
 ### 12 forecasts of AirPasseners data using auto.arima (concurrent)
@@ -128,11 +128,11 @@ Output:
   {:period "Oct 1961", :observation 497.2078, :forecast true}
   {:period "Nov 1961", :observation 429.87198, :forecast true}
   {:period "Dec 1961", :observation 477.24255, :forecast true}),
- :time "68.190437"}
+ :time "4826.318828"}
 ```
 
 Estimating the models and forecasting the series in parallel results in a 
 
 ```
-16968.56 / 68.19 ~ 250 times speed up
+19631.49 / 4826.31 ~ 4 times speed up
 ```
