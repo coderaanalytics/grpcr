@@ -134,9 +134,18 @@
                                     result (nth results n)]]
                         (do-forecast stub request result))
                       (for [result results
-                            :let [response (deref result 10000 :timed-out)]]
-                        (if (= response :timed-out)
-                          response
+                            :let [time-limit 10000
+                                  response (deref result time-limit :timed-out)]]
+                        (cond
+                          (instance? Throwable response)
+                          (throw response)
+
+                          (= response :timed-out)
+                          (throw (ex-info "Request timed out."
+                                          {:type :timed-out
+                                           :time-limit time-limit}))
+
+                          :else
                           (let [datum (last (.getObservationsList response))]
                             {:period (.getPeriod datum)
                              :observation (.getObservation datum)
