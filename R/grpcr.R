@@ -59,13 +59,20 @@ grpc_server <- function(path, port = 35000, backend = "jri", ...) {
       } else {
         10
       }
+      Rserve(debug = FALSE,
+             port = 6311L,
+             args = paste0("--no-save ",
+                           "--slave ",
+                           "--RS-set shutdown=1 ",
+                           "--RS-set qap.oc=1 ",
+                           "--RS-set source=", path),
+             wait = TRUE)
       .jinit()
       .jaddClassPath(system.file("grpcr.jar", package = "gRPCr"))
       grpcr <- .jnew("software/codera/grpcr/Server")
       server <- .jcall(grpcr,
                        "Lio/grpc/Server;",
                        "rserveServer",
-                       path,
                        as.integer(port),
                        as.integer(max_connections))
       .jcall(server, "Lio/grpc/Server;", "start")
@@ -74,9 +81,11 @@ grpc_server <- function(path, port = 35000, backend = "jri", ...) {
     }, error = function(e) {
       stop("Failed to start gRPC server: ", conditionMessage(e), "\n")
     }, interrupt = function(i) {
+      if (backend == "rserve") {
+        message("\nShutting down Rserve\n")
+        system("pkill Rserve")
+      }
       message("\nShutting down gRPC server\n")
-      if (backend == "rserve")
-        .jcall(grpcr, "V", "shutdownRserve")
       .jcall(server, "Lio/grpc/Server;", "shutdown")
       return(invisible(NULL))
     })

@@ -3,7 +3,7 @@
   (:import [io.grpc BindableService CallOptions ManagedChannel ManagedChannelBuilder MethodDescriptor MethodDescriptor$Marshaller MethodDescriptor$MethodType ServerBuilder ServerServiceDefinition ServerServiceDefinition$Builder Status StatusRuntimeException]
            [io.grpc.stub ClientCalls ServerCalls ServerCalls$UnaryMethod StreamObserver]
            [org.rosuda.REngine REXP REXPReference REngineException REXPMismatchException REXPLanguage RList REXPRaw REXPString]
-           [org.rosuda.REngine.Rserve RConnection RserveException StartRserve]
+           [org.rosuda.REngine.Rserve RConnection RserveException]
            [java.util HashMap]))
 
 (defn call-ocap
@@ -50,8 +50,7 @@
   :prefix "server-"
   :main false
   :methods [^{:static true} [jriServer [java.util.HashMap int] io.grpc.Server]
-            ^{:static true} [rserveServer [java.lang.String int int] io.grpc.Server]
-            ^{:static true} [shutdownRserve [] void]])
+            ^{:static true} [rserveServer [int int] io.grpc.Server]])
 
 (set! *warn-on-reflection* true)
 
@@ -166,22 +165,7 @@
          (maxInboundMessageSize Integer/MAX_VALUE)
          build)))
 
-(defn server-rserveServer [^String services port max-connections]
-  (try
-    (StartRserve/launchRserve
-      "R"
-      "--no-save --slave"
-      (str "--no-save --slave "
-           "--RS-set shutdown=1 "
-           "--RS-set qap.oc=1 "
-           "--RS-set source=" services)
-      false)
-    (catch Exception e
-      (println ;;FIXME: log this
-               (ex-info "Failed to start Rserve."
-                        {:type :rserve-launch
-                         :cause "Exception launching Rserve."}
-                        e))))
+(defn server-rserveServer [port max-connections]
   (with-open [rserve (RConnection.)]
     (let [services (ocap->services rserve)
           server (ServerBuilder/forPort port)
@@ -196,16 +180,6 @@
       (.. server
           (maxInboundMessageSize Integer/MAX_VALUE)
           build))))
-
-(defn server-shutdownRserve []
-  (try
-    (with-open [rserve (RConnection.)]
-      (.shutdown rserve)
-      nil)
-    (catch Exception _
-      (println "Rserve failed to shutdown gracefully, shutting down forcefully")
-      (.exec (Runtime/getRuntime) "pkill Rserve")
-      nil)))
 
 (gen-class
   :name software.codera.grpcr.Client
