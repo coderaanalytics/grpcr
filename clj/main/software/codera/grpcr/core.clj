@@ -50,7 +50,7 @@
   :prefix "server-"
   :main false
   :methods [^{:static true} [jriServer [java.util.HashMap int] io.grpc.Server]
-            ^{:static true} [rserveServer [java.lang.String int] io.grpc.Server]
+            ^{:static true} [rserveServer [java.lang.String int int] io.grpc.Server]
             ^{:static true} [shutdownRserve [] void]])
 
 (set! *warn-on-reflection* true)
@@ -166,7 +166,7 @@
          (maxInboundMessageSize Integer/MAX_VALUE)
          build)))
 
-(defn server-rserveServer [^String services port]
+(defn server-rserveServer [^String services port max-connections]
   (try
     (StartRserve/launchRserve
       "R"
@@ -185,8 +185,8 @@
   (with-open [rserve (RConnection.)]
     (let [services (ocap->services rserve)
           server (ServerBuilder/forPort port)
-          connection-pool (chan 4)]
-      (dotimes [_ 4]
+          connection-pool (chan max-connections)]
+      (dotimes [_ max-connections]
         (let [connection (RConnection.)]
           (->> {:connection connection
                 :services (ocap->services connection)}

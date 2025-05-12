@@ -53,6 +53,12 @@ grpc_server <- function(path, port = 35000, backend = "jri", ...) {
     })
   } else if (backend == "rserve")  {
     tryCatch({
+      dots <- list(...)
+      max_connections <- if (!is.null(dots$max_connections)) {
+        dots$max_connections
+      } else {
+        10
+      }
       .jinit()
       .jaddClassPath(system.file("grpcr.jar", package = "gRPCr"))
       grpcr <- .jnew("software/codera/grpcr/Server")
@@ -60,7 +66,8 @@ grpc_server <- function(path, port = 35000, backend = "jri", ...) {
                        "Lio/grpc/Server;",
                        "rserveServer",
                        path,
-                       as.integer(port))
+                       as.integer(port),
+                       as.integer(max_connections))
       .jcall(server, "Lio/grpc/Server;", "start")
       message("gRPC server listening on port ", port, "\n")
       Sys.sleep(Inf)
