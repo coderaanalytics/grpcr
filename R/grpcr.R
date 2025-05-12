@@ -43,12 +43,12 @@ grpc_server <- function(path, port = 35000, backend = "jri", ...) {
                        service_map,
                        as.integer(port))
       .jcall(server, "Lio/grpc/Server;", "start")
-      message("gRPC server listening on port ", port, "\n")
+      message("gRPC server listening on port ", port)
       Sys.sleep(Inf)
     }, error = function(e) {
       stop("Failed to start gRPC server: ", conditionMessage(e), "\n")
     }, interrupt = function(i) {
-      message("\nShutting down gRPC server\n")
+      message("Shutting down gRPC server")
       .jcall(server, "Lio/grpc/Server;", "shutdown")
     })
   } else if (backend == "rserve")  {
@@ -76,21 +76,21 @@ grpc_server <- function(path, port = 35000, backend = "jri", ...) {
                        as.integer(port),
                        as.integer(max_connections))
       .jcall(server, "Lio/grpc/Server;", "start")
-      message("gRPC server listening on port ", port, "\n")
+      message("gRPC server listening on port ", port)
       Sys.sleep(Inf)
     }, error = function(e) {
       stop("Failed to start gRPC server: ", conditionMessage(e), "\n")
     }, interrupt = function(i) {
       if (backend == "rserve") {
-        message("\nShutting down Rserve\n")
+        message("Shutting down Rserve")
         system("pkill Rserve")
       }
-      message("\nShutting down gRPC server\n")
+      message("Shutting down gRPC server")
       .jcall(server, "Lio/grpc/Server;", "shutdown")
       return(invisible(NULL))
     })
   } else {
-    stop("Backend '", backend, "', not supported.")
+    stop("Backend '", backend, "', not supported.", "\n")
   }
 }
 
